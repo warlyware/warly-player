@@ -64,7 +64,8 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setIsStreamDead(false);
     const howl = new Howl({
-      src: ['http://192.168.50.3:8000/stream'],
+      // src: ['http://192.168.50.3:8000/stream'],
+      src: ['https://hear.clear.beer/stream'],
       html5: true,
       format: ['mp3', 'aac'],
       autoplay: true,
