@@ -8,45 +8,87 @@ interface AudioContextType {
   play: () => void;
   pause: () => void;
   isPlaying: boolean;
+  isReconnecting: boolean;
+  isStreamDead: boolean;
 }
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
 
 export function AudioProvider({ children }: { children: ReactNode }) {
   const soundRef = useRef<Howl | null>(null);
+  const pendingPlayRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { setIsLoading } = useLoading();
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isStreamDead, setIsStreamDead] = useState(false);
 
-  useEffect(() => {
-    // Prevent creating multiple instances (e.g., in StrictMode)
-    if (soundRef.current) {
-      console.log('Howl instance already exists, skipping creation');
+  const clearReconnectTimer = (shouldResetState = true) => {
+    if (reconnectTimerRef.current) {
+      clearInterval(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+
+    if (shouldResetState) {
+      setIsReconnecting(false);
+    }
+  };
+
+  const startReconnectTimer = () => {
+    if (reconnectTimerRef.current) {
       return;
     }
 
-    console.log('Creating new Howl instance');
-    // Set loading when initializing
-    setIsLoading(true);
+    console.log('Attempting to reconnect');
+    setIsReconnecting(true);
+    reconnectTimerRef.current = setInterval(() => {
+      const sound = soundRef.current;
+      if (!sound || sound.playing() || pendingPlayRef.current) {
+        return;
+      }
 
-    // Create the Howl instance
-    soundRef.current = new Howl({
+      console.log('Attempting to reconnect');
+      pendingPlayRef.current = true;
+      setIsLoading(true);
+      sound.play();
+    }, 1000);
+  };
+
+  const initializeHowl = () => {
+    if (soundRef.current) {
+      return soundRef.current;
+    }
+
+    console.log('Creating new Howl instance');
+    pendingPlayRef.current = true;
+    setIsLoading(true);
+    setIsStreamDead(false);
+    const howl = new Howl({
       src: ['http://192.168.50.3:8000/stream'],
       html5: true,
-      autoplay: true,
       format: ['mp3', 'aac'],
-      onload: () => {
-        console.log('onload - stream loaded');
-        setIsLoading(false);
-        // autoplay should handle starting playback
-      },
+      autoplay: true,
       onloaderror: (_id, error) => {
         console.error('Load error:', error);
+        pendingPlayRef.current = false;
+        setIsStreamDead(true);
         setIsLoading(false);
+        startReconnectTimer();
       },
       onplay: () => {
         console.log('onplay - stream playing');
+        pendingPlayRef.current = false;
+        clearReconnectTimer();
         setIsLoading(false);
         setIsPlaying(true);
+        setIsReconnecting(false);
+        setIsStreamDead(false);
+      },
+      onplayerror: (_id, error) => {
+        console.error('Play error:', error);
+        pendingPlayRef.current = false;
+        setIsPlaying(false);
+        setIsLoading(false);
       },
       onpause: () => {
         console.log('onpause - stream paused');
@@ -54,17 +96,26 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       },
       onend: () => {
         console.log('onend - stream ended, will auto-reconnect');
+        pendingPlayRef.current = false;
         setIsPlaying(false);
-        setTimeout(() => {
-          console.log('Attempting to reconnect');
-          soundRef.current?.play();
-        }, 1000);
+        startReconnectTimer();
       },
     });
 
-    // Cleanup on unmount
+    soundRef.current = howl;
+    return howl;
+  };
+
+  useEffect(() => {
+    initializeHowl();
+
     return () => {
       console.log('Cleaning up Howl instance');
+      if (reconnectTimerRef.current) {
+        clearInterval(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      setIsReconnecting(false);
       if (soundRef.current) {
         soundRef.current.unload();
         soundRef.current = null;
@@ -74,24 +125,47 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const play = () => {
-    console.log('play() called, soundRef exists:', !!soundRef.current, 'currently playing:', soundRef.current?.playing());
-    if (soundRef.current && !soundRef.current.playing()) {
-      console.log('Calling soundRef.current.play()');
-      soundRef.current.play();
-    } else if (soundRef.current?.playing()) {
-      console.log('Already playing, not calling play()');
+    const sound = initializeHowl();
+    console.log('play() called, soundRef exists:', !!sound, 'currently playing:', sound?.playing(), 'pending:', pendingPlayRef.current);
+
+    if (!sound) {
+      return;
+    }
+
+    if (sound.playing() || pendingPlayRef.current) {
+      console.log('Already playing or pending playback, not calling play()');
+      return;
+    }
+
+    pendingPlayRef.current = true;
+    setIsStreamDead(false);
+    setIsLoading(true);
+    try {
+      sound.play();
+    } catch (error) {
+      pendingPlayRef.current = false;
+      setIsLoading(false);
+      console.error('Failed to trigger playback', error);
     }
   };
 
   const pause = () => {
     console.log('pause() called');
     if (soundRef.current) {
+      pendingPlayRef.current = false;
       soundRef.current.pause();
     }
   };
 
   return (
-    <AudioContext.Provider value={{ sound: soundRef.current, play, pause, isPlaying }}>
+    <AudioContext.Provider value={{
+      sound: soundRef.current,
+      play,
+      pause,
+      isPlaying,
+      isReconnecting,
+      isStreamDead,
+    }}>
       {children}
     </AudioContext.Provider>
   );
