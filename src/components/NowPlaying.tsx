@@ -35,9 +35,9 @@ function NowPlaying() {
   }, [nowPlaying]);
 
   return (
-    <div className="text-white text-2xl font-bold text-center px-4">
-      <h1>{title}</h1>
-      <p>{artist}</p>
+    <div className="text-gray-200 px-4 text-center font-thin">
+      <h1 className="text-4xl mb-4">{title}</h1>
+      <p className="text-lg">{artist}test</p>
     </div>
   )
 }

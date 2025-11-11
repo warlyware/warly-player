@@ -22,15 +22,13 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     if (soundRef.current) {
       return soundRef.current;
     }
-    setIsLoading(true);
     console.log('Creating new Howl instance');
-    pendingPlayRef.current = true;
     const howl = new Howl({
       src: ['http://192.168.50.3:8000/stream'],
       // src: ['https://hear.clear.beer/stream'],
       html5: true,
       format: ['mp3', 'aac'],
-      autoplay: true,
+      autoplay: false,
       onloaderror: (_id, error) => {
         console.error('Load error:', error);
         pendingPlayRef.current = false;
@@ -39,11 +37,11 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       onplay: () => {
         console.log('onplay - stream playing');
         pendingPlayRef.current = false;
+        setIsLoading(false);
         setIsPlaying(true);
       },
       onload: () => {
         console.log('onload - stream loaded');
-        setIsLoading(false);
       },
       onplayerror: (_id, error) => {
         console.error('Play error:', error);
@@ -93,6 +91,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     }
 
     pendingPlayRef.current = true;
+    setIsLoading(true);
 
     try {
       sound.play();
