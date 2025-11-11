@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState } from 'react';
+import type { ReactNode } from 'react';
 
 interface LoadingContextType {
   isLoading: boolean;
@@ -17,6 +18,7 @@ export function LoadingProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useLoading() {
   const context = useContext(LoadingContext);
   if (context === undefined) {
