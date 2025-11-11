@@ -22,7 +22,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     if (soundRef.current) {
       return soundRef.current;
     }
-
+    setIsLoading(true);
     console.log('Creating new Howl instance');
     pendingPlayRef.current = true;
     const howl = new Howl({
