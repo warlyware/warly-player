@@ -8,9 +8,10 @@ function NowPlaying() {
 
   useEffect(() => {
     const fetchNowPlaying = () => {
-      fetch('/api/metadata/nowplaying.txt')
+      fetch('/metadata/nowplaying.txt')
         .then(response => response.text())
-        .then(data => setNowPlaying(data));
+        .then(data => setNowPlaying(data))
+        .catch(error => console.error('Failed to fetch now playing:', error));
     };
 
     // Fetch immediately on mount
