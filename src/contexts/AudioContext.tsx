@@ -8,8 +8,6 @@ interface AudioContextType {
   play: () => void;
   pause: () => void;
   isPlaying: boolean;
-  isReconnecting: boolean;
-  isStreamDead: boolean;
 }
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
@@ -17,42 +15,8 @@ const AudioContext = createContext<AudioContextType | undefined>(undefined);
 export function AudioProvider({ children }: { children: ReactNode }) {
   const soundRef = useRef<Howl | null>(null);
   const pendingPlayRef = useRef(false);
-  const reconnectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { setIsLoading } = useLoading();
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isReconnecting, setIsReconnecting] = useState(false);
-  const [isStreamDead, setIsStreamDead] = useState(false);
-
-  const clearReconnectTimer = (shouldResetState = true) => {
-    if (reconnectTimerRef.current) {
-      clearInterval(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-
-    if (shouldResetState) {
-      setIsReconnecting(false);
-    }
-  };
-
-  const startReconnectTimer = () => {
-    if (reconnectTimerRef.current) {
-      return;
-    }
-
-    console.log('Attempting to reconnect');
-    setIsReconnecting(true);
-    reconnectTimerRef.current = setInterval(() => {
-      const sound = soundRef.current;
-      if (!sound || sound.playing() || pendingPlayRef.current) {
-        return;
-      }
-
-      console.log('Attempting to reconnect');
-      pendingPlayRef.current = true;
-      setIsLoading(true);
-      sound.play();
-    }, 1000);
-  };
 
   const initializeHowl = () => {
     if (soundRef.current) {
@@ -62,7 +26,6 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     console.log('Creating new Howl instance');
     pendingPlayRef.current = true;
     setIsLoading(true);
-    setIsStreamDead(false);
     const howl = new Howl({
       // src: ['http://192.168.50.3:8000/stream'],
       src: ['https://hear.clear.beer/stream'],
@@ -72,18 +35,13 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       onloaderror: (_id, error) => {
         console.error('Load error:', error);
         pendingPlayRef.current = false;
-        setIsStreamDead(true);
         setIsLoading(false);
-        startReconnectTimer();
       },
       onplay: () => {
         console.log('onplay - stream playing');
         pendingPlayRef.current = false;
-        clearReconnectTimer();
         setIsLoading(false);
         setIsPlaying(true);
-        setIsReconnecting(false);
-        setIsStreamDead(false);
       },
       onplayerror: (_id, error) => {
         console.error('Play error:', error);
@@ -96,10 +54,9 @@ export function AudioProvider({ children }: { children: ReactNode }) {
         setIsPlaying(false);
       },
       onend: () => {
-        console.log('onend - stream ended, will auto-reconnect');
+        console.log('onend - stream ended');
         pendingPlayRef.current = false;
         setIsPlaying(false);
-        startReconnectTimer();
       },
     });
 
@@ -112,11 +69,6 @@ export function AudioProvider({ children }: { children: ReactNode }) {
 
     return () => {
       console.log('Cleaning up Howl instance');
-      if (reconnectTimerRef.current) {
-        clearInterval(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-      setIsReconnecting(false);
       if (soundRef.current) {
         soundRef.current.unload();
         soundRef.current = null;
@@ -139,7 +91,6 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     }
 
     pendingPlayRef.current = true;
-    setIsStreamDead(false);
     setIsLoading(true);
     try {
       sound.play();
@@ -164,8 +115,6 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       play,
       pause,
       isPlaying,
-      isReconnecting,
-      isStreamDead,
     }}>
       {children}
     </AudioContext.Provider>
